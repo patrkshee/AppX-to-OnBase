@@ -154,7 +154,7 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
 				updatedSched = updateWvSched(app, false);
 					
 				if(updatedSched != true)
-					throw new Exception("Issue while attempting to update the Workview scheduler object.");
+					throw new Exception("Issue while attempting to update the Workview scheduler object");
 				
 				//TODO: Last run and batch size attributes
 				
@@ -840,7 +840,7 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
 				}else{
 					//Lock this scheduler record to begin processing
 					valMod.SetAttributeValue(wvAppCls.schedInitDt, DateTime.Now);
-					valMod.SetAttributeValue(wvAppCls.schedLastRun, null);
+					//valMod.SetAttributeValue(wvAppCls.schedLastRun, null);
 					valMod.SetAttributeValue(wvAppCls.schedInUse, true);
 				}
 				
