@@ -23,29 +23,29 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
     public class Config
     {
         //Workview App and Class Names
-        public string wvAppName = "OITADM EDW Migration";       //Name of Workview app for document extraction
-        public string wvClsName = "DocumentMetadata";           //Main AppXtender data class containing docids, data source, etc.
-        public string wvClsNameSched = "ScriptManager";             //Script Manager class for concurrently running multiple instances of script
+        public string wvAppName = "OITADM EDW Migration";               //Name of Workview app for document extraction
+        public string wvClsName = "DocumentMetadata";                   //Main AppXtender data class containing docids, data source, etc.
+        public string wvClsNameSched = "ScriptManager";                 //Script Manager class for concurrently running multiple instances of script
         public string wvFilterNameSched = "US - Available Schedulers";  //WV filter for available schedulers to run multiple instance of script
-                                                                        //public string wvFilterName	= "US - EDW Document Extract 1";//Main WV filter returning AppXtender data - Now specified in Scheduler WV object
-                                                                        //public int wvQueryBatchSize 	= 3;							//Max query results to return from EDW filter in Workview - Now specified in Scheduler WV object
+        //public string wvFilterName	= "US - EDW Document Extract 1";//Main WV filter returning AppXtender data - Now specified in Scheduler WV object
+        //public int wvQueryBatchSize 	= 3;							//Max query results to return from EDW filter in Workview - Now specified in Scheduler WV object
 
         //AppXtender/EDW Web Services Account
         public string appXUser = "USER";
         public string appXPass = "PASSWORD";
 
         //AppXtender/EDW Config Settings
-        public int edwTimeout = 1800;       //1800 for 30 min - Max number of iterations to check if file export is ready from EDW. Each iteration waits <edwWaitTime> milliseconds
-        public int edwWaitTime = 1000;      //Number of milliseconds to wait between each iteration when checking for file export completion (1000 = 1 second)
-        public int edwMaxByte = 0x50000;    //Default value is "0x1000" for 4KB file chunks at a time
+        public int edwTimeout = 1800;           //1800 for 30 min - Max number of iterations to check if file export is ready from EDW. Each iteration waits <edwWaitTime> milliseconds
+        public int edwWaitTime = 1000;          //Number of milliseconds to wait between each iteration when checking for file export completion (1000 = 1 second)
+        public int edwMaxByte = 0x50000;        //Default value is "0x1000" for 4KB file chunks at a time
         public int edwStartPosition = 0;        //A 0-based integer value specifying the starting position from which query result items will be returned
-        public int edwPageSize = 10;        //An integer value specifying the number of items to return
-        public int edwMaxHits = 10;     //An integer value specifying the maximum number of documents to retrieve from the EDW database
+        public int edwPageSize = 10;            //An integer value specifying the number of items to return
+        public int edwMaxHits = 10;             //An integer value specifying the maximum number of documents to retrieve from the EDW database
         public bool edwSaveQuery = false;
         public bool edwSaveAsPrivate = false;
 
         //OnBase Config Settings
-        public string obFileType = "PDF";   //File type to pull into OnBase. ex. PDF, Image File Format
+        public string obFileType = "PDF";       //File type to pull into OnBase. ex. PDF, Image File Format
 
         public string sessionTicket = string.Empty;
     }
@@ -58,11 +58,11 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
     public class EdwDocument
     {
         public string wvDataSource = null;      //EDW Data source to search in provided in WV data
-        public short wvEdwAppId = 0;        //EDW App ID to search in provided in WV data
-        public short wvEdwDocIdCol = 0;     //EDW Column/field number (starting with 1) which contains the docid
-        public int wvEdwDocId = 0;      //EDW docid
-        public int wvEdwNumobjects = 0;     //EDW numobjects column (# of pages in a doc generally)
-        public string wvDocType = null;     //OnBase document type to index document to
+        public short wvEdwAppId = 0;            //EDW App ID to search in provided in WV data
+        public short wvEdwDocIdCol = 0;         //EDW Column/field number (starting with 1) which contains the docid
+        public int wvEdwDocId = 0;              //EDW docid
+        public int wvEdwNumobjects = 0;         //EDW numobjects column (# of pages in a doc generally)
+        public string wvDocType = null;         //OnBase document type to index document to
         public string error = null;
         public Stopwatch docTimer = new Stopwatch();
         public string docTime = null;
