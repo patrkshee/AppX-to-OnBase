@@ -13,8 +13,11 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
     using Hyland.Unity;
     using Hyland.Unity.CodeAnalysis;
     using Hyland.Unity.WorkView;
+    using Hyland.Unity.Workflow;
     using XtenderSolutions.Services.TransferObjects;
-    using DORA_EDW_WebServices;
+
+    //using EDW_WebServices;		//For main EDW/AppXtender instance
+    using DORA_EDW_WebServices;		//For DORA EDW/AppXtender instance
 
     #region Config Class
     /// <summary>
@@ -27,8 +30,12 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
         public string wvClsName = "DocumentMetadata";                   //Main AppXtender data class containing docids, data source, etc.
         public string wvClsNameSched = "ScriptManager";                 //Script Manager class for concurrently running multiple instances of script
         public string wvFilterNameSched = "US - Available Schedulers";  //WV filter for available schedulers to run multiple instance of script
-        //public string wvFilterName	= "US - EDW Document Extract 1";//Main WV filter returning AppXtender data - Now specified in Scheduler WV object
-        //public int wvQueryBatchSize 	= 3;							//Max query results to return from EDW filter in Workview - Now specified in Scheduler WV object
+        public string wvAttrDocDate = "AppXdate1";                      //Workview Attribute to use for the OnBase document date
+                                                                        //public string wvFilterName	= "US - EDW Document Extract 1";//Main WV filter returning AppXtender data - Now specified in Scheduler WV object
+                                                                        //public int wvQueryBatchSize 	= 3;							//Max query results to return from EDW filter in Workview - Now specified in Scheduler WV object
+
+        //Workflow/Life Cycle
+        public string wfName = "OITADM EDW Document Indexing";			//Life Cycle name for post import work (ie. AFKS indexing, etc.)
 
         //AppXtender/EDW Web Services Account
         public string appXUser = "USER";
@@ -45,7 +52,9 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
         public bool edwSaveAsPrivate = false;
 
         //OnBase Config Settings
-        public string obFileType = "PDF";       //File type to pull into OnBase. ex. PDF, Image File Format
+        public string obFileType = "PDF";                           //File type to pull into OnBase. ex. PDF, Image File Format
+        public string kwNameDocId = "DORAPUC EDW Sys Doc ID";       //OnBase keyword type name to add the EDW Docid value to
+        public string kwNameWvObjId = "DORAPUC EDW Sys WV ID";		//OnBase keyword type name to add the associated Workview Object ID value to. Also matches related item KW mapping in WF for indexing.
 
         public string sessionTicket = string.Empty;
     }
@@ -63,6 +72,8 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
         public int wvEdwDocId = 0;              //EDW docid
         public int wvEdwNumobjects = 0;         //EDW numobjects column (# of pages in a doc generally)
         public string wvDocType = null;         //OnBase document type to index document to
+        public int wvObjId = 0;                 //Workview Object ID of record representing each AppX document
+        public string wvDocDate = null;			//EDW value to assign to the OnBase Document Date
         public string error = null;
         public Stopwatch docTimer = new Stopwatch();
         public string docTime = null;
@@ -94,6 +105,7 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
         public Hyland.Unity.WorkView.Attribute schedInUse = null;
         public Hyland.Unity.WorkView.Attribute schedDisableOnRun = null;
         public Hyland.Unity.WorkView.Attribute schedEnabledAttr = null;
+
 
         //Attribute values
         public string wvFilterName = null;      //Main WV filter returning AppXtender data - obtained from WV Script Manager
@@ -127,6 +139,9 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
         {
             app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Info, "*** Starting EDW SOAP Script ***");
 
+            Workflow wfModule = app.Workflow;
+            LifeCycle wfLC = wfModule.LifeCycles.Find(config.wfName);
+
             DateTime dt = DateTime.Now;
             app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Info, "Date/Time: " + dt.ToString("F"));
 
@@ -137,6 +152,7 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
             bool updatedSched = false;
 
             DORA_EDW_WebServices.AxSoapAlerts alerts = null;
+
             MemoryStream responseStream = new MemoryStream();
 
             try
@@ -186,7 +202,8 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
                     app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, i + ") Workview Object ID: " + obj);
 
                     //Set doc-specific config values from WV attributes
-                    setConfigValues(app, obj.AttributeValues);
+                    //setConfigValues(app, obj.AttributeValues);
+                    setConfigValues(app, obj);
 
                     //Perform precheck of Workview values
                     validate = precheckWvValues(app);
@@ -287,6 +304,10 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
                             break;
                         }
 
+                        //Add document to Life Cycle for further processing (indexing, etc.)
+                        app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "Adding document to life cycle: " + config.wfName);
+                        wfModule.AddToLifeCycle(newDoc, wfLC);
+
                     }   //End of EDW results loop
 
                     //Update Workview object with current status
@@ -373,6 +394,7 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
                 wvAppCls.schedInUse = wvAppCls.wvSchedClass.Attributes.Find("InUse");
                 wvAppCls.schedEnabledAttr = wvAppCls.wvSchedClass.Attributes.Find("Enabled");
                 wvAppCls.schedDisableOnRun = wvAppCls.wvSchedClass.Attributes.Find("DisableAfterRun");
+
 
                 //AppXtender/EDW Extraction Attributes
                 wvAppCls.edwExtractedAttr = wvAppCls.wvEdwClass.Attributes.Find("extracted");
@@ -822,7 +844,12 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
                 // Add editable keyword record to storage properties
                 // TODO: AFKS to fill the remaining keyword values (outside of script)
                 // TODO: Unique ID for multiple apps (appid.docid)?
-                docProps.AddKeyword("Legacy ID", edwDoc.wvEdwDocId.ToString());
+                docProps.AddKeyword(config.kwNameDocId, edwDoc.wvEdwDocId);
+                docProps.AddKeyword(config.kwNameWvObjId, edwDoc.wvObjId);
+                if (edwDoc.wvDocDate != null)
+                {
+                    docProps.DocumentDate = DateTime.Parse(edwDoc.wvDocDate);
+                }
 
                 app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "Preparing to archive document in OnBase.");
 
@@ -961,23 +988,27 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
         /// setConfigValues function - Sets config values from WV attributes
         /// </summary>
         /// <param name="app"></param>
-        /// <param name="attrList"></param>
-        public void setConfigValues(Hyland.Unity.Application app, AttributeValueList attrList)
+        /// <param name="obj"></param>
+        public void setConfigValues(Hyland.Unity.Application app, Hyland.Unity.WorkView.Object obj)
         {
             try
             {
+                AttributeValueList attrList = obj.AttributeValues;
+
                 //Set EDW configs based on EDW records in Workview
                 edwDoc.wvDataSource = attrList.Find("AppXdatasource").AlphanumericValue;
                 edwDoc.wvEdwAppId = (short)attrList.Find("AppXappid").IntegerValue;
                 edwDoc.wvEdwDocId = (int)attrList.Find("AppXdocid").IntegerValue;
                 edwDoc.wvEdwDocIdCol = (short)attrList.Find("AppXdocidColNum").IntegerValue;
                 edwDoc.wvEdwNumobjects = attrList.Find("AppXnumobjects").HasValue == true ? (int)attrList.Find("AppXnumobjects").IntegerValue : 0;
+                edwDoc.wvObjId = (int)obj.ID;
 
                 if (edwDoc.wvEdwDocIdCol < 1)
                     throw new Exception("DocId column is invalid. Ensure you have specified a proper column to find the EDW DocId. This should match the field<#> from the AppXtender ae_dt table.");
 
                 //TODO: Determine what to do with unmatched OnBase Doc Types
                 edwDoc.wvDocType = attrList.Find("OBdoctype").HasValue == true ? attrList.Find("OBdoctype").AlphanumericValue : null;
+                edwDoc.wvDocDate = attrList.Find(config.wvAttrDocDate).HasValue == true ? attrList.Find(config.wvAttrDocDate).DateValue.ToString() : DateTime.Today.ToString();
 
                 app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, attrList.Count + " attributes found.");
                 app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "EDW docid: " + attrList.Find("AppXdocid"));
