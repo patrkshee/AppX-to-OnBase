@@ -73,7 +73,8 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
         public int wvEdwNumobjects = 0;         //EDW numobjects column (# of pages in a doc generally)
         public string wvDocType = null;         //OnBase document type to index document to
         public int wvObjId = 0;                 //Workview Object ID of record representing each AppX document
-        public string wvDocDate = null;			//EDW value to assign to the OnBase Document Date
+        public string wvDocDate = null;         //EDW value to assign to the OnBase Document Date
+        public long wvObDocHandle = 0;			//OnBase Doc handle generated after document archival
         public string error = null;
         public Stopwatch docTimer = new Stopwatch();
         public string docTime = null;
@@ -96,6 +97,7 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
         public Hyland.Unity.WorkView.Attribute edwExtractTimeElapsedAttr = null;
         public Hyland.Unity.WorkView.Attribute edwExtractDTAttr = null;
         public Hyland.Unity.WorkView.Attribute edwFilterName = null;
+        public Hyland.Unity.WorkView.Attribute obDocHandle = null;
 
         //Scheduler Attributes
         public Hyland.Unity.WorkView.Attribute schedFilterName = null;
@@ -402,6 +404,7 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
                 wvAppCls.edwExtractTimeElapsedAttr = wvAppCls.wvEdwClass.Attributes.Find("ExtractTime");
                 wvAppCls.edwExtractDTAttr = wvAppCls.wvEdwClass.Attributes.Find("ExtractDT");
                 wvAppCls.edwFilterName = wvAppCls.wvEdwClass.Attributes.Find("FilterName");
+                wvAppCls.obDocHandle = wvAppCls.wvEdwClass.Attributes.Find("OBdochandle");
 
             }
             catch (Exception ex)
@@ -866,6 +869,9 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
                     return null;
                 }
 
+                //Record new OnBase doc handle
+                edwDoc.wvObDocHandle = newDoc.ID;
+
                 app.Diagnostics.Write(string.Format("Uploaded new document, doc handle: {0}, date stored: {1}", newDoc.ID, newDoc.DateStored));
 
                 return newDoc;
@@ -947,6 +953,9 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
                 valMod.SetAttributeValue(wvAppCls.edwExtractedAttr, true);
                 valMod.SetAttributeValue(wvAppCls.edwExtractDTAttr, DateTime.Now);
                 valMod.SetAttributeValue(wvAppCls.edwFilterName, wvAppCls.wvFilterName);
+
+                //Write the OnBase doc handle to the WV record
+                valMod.SetAttributeValue(wvAppCls.obDocHandle, edwDoc.wvObDocHandle);
 
                 if (edwDoc.error != null)
                 {
