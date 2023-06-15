@@ -7,6 +7,7 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
     using System.Diagnostics;
     using System.IO;
     using System.Net.Http;
+    using System.Reflection;
     using System.ServiceModel;
     using System.Text;
     using System.Threading.Tasks;
@@ -239,78 +240,78 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
                     AxSearchResults edwQueryResults = queryDocsInEDW(app);
 
                     if (edwQueryResults == null)
-                        throw new Exception("Issue encountered while attempting to execute a query in EDW/AppXtender");
-
-                    //For each EDW document returned from query results
-                    for (int ii = 0; ii < edwQueryResults.Count; ii++)
                     {
-                        if (ii >= config.edwMaxHits)
+                        string err = docError(app, "No documents were found in AppXtender/EDW that matched the query criteria.");
+                    }
+                    else
+                    {
+                        //For each EDW document returned from query results
+                        for (int ii = 0; ii < edwQueryResults.Count; ii++)
                         {
-                            app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Warning, "Terminated document query results due to reaching max configured results of " + config.edwMaxHits);
-                            break;
-                        }
+                            if (ii >= config.edwMaxHits)
+                            {
+                                app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Warning, "Terminated document query results due to reaching max configured results of " + config.edwMaxHits);
+                                break;
+                            }
 
-                        //login and create session ticket if not already set
-                        config.sessionTicket = loginToEDW(app);
+                            //login and create session ticket if not already set
+                            config.sessionTicket = loginToEDW(app);
 
-                        AxSearchResultItem doc = (AxSearchResultItem)edwQueryResults.Results[ii];
-                        docRef = doc.ObjectReference;
+                            AxSearchResultItem doc = (AxSearchResultItem)edwQueryResults.Results[ii];
+                            docRef = doc.ObjectReference;
 
-                        app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "[Doc " + ii + "] Object/Document Reference: " + docRef);
-                        app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Info, "[Doc " + ii + "] Doc ID: " + doc.DocId);
-                        app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "[Doc " + ii + "] WV Record Doc ID: " + edwDoc.wvEdwDocId);
+                            app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "[Doc " + ii + "] Object/Document Reference: " + docRef);
+                            app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Info, "[Doc " + ii + "] Doc ID: " + doc.DocId);
+                            app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "[Doc " + ii + "] WV Record Doc ID: " + edwDoc.wvEdwDocId);
 
-                        if (doc.DocId != edwDoc.wvEdwDocId)
-                            throw new Exception("Mismatched EDW Doc ID detected! Expected Doc ID from WV: " + edwDoc.wvEdwDocId + ", returned Doc ID from EDW: " + doc.DocId);
+                            if (doc.DocId != edwDoc.wvEdwDocId)
+                                throw new Exception("Mismatched EDW Doc ID detected! Expected Doc ID from WV: " + edwDoc.wvEdwDocId + ", returned Doc ID from EDW: " + doc.DocId);
 
-                        //Start stop watch to time document extraction duration
-                        edwDoc.docTimer.Start();
+                            //Start stop watch to time document extraction duration
+                            edwDoc.docTimer.Start();
 
-                        //Export document from EDW/AppXtender, receive a job key to check on status
-                        Task<EDW_WebServices.ExportDocumentPagesByRefResponse> jobKey = getJobKeyFromEDW(app, docRef);
+                            //Export document from EDW/AppXtender, receive a job key to check on status
+                            Task<EDW_WebServices.ExportDocumentPagesByRefResponse> jobKey = getJobKeyFromEDW(app, docRef);
 
-                        if (jobKey == null)
-                            throw new Exception("Issue encountered while attempting to request a document export out of EDW/AppXtender");
+                            if (jobKey == null)
+                                break;
 
-                        //Wait and check for file stream availability
-                        AxStringArray stringArray = checkDocFromEDW(app, jobKey);
+                            //Wait and check for file stream availability
+                            AxStringArray stringArray = checkDocFromEDW(app, jobKey);
 
-                        //If no value returned break out of this result and continue to next document after recording error
-                        if (stringArray == null)
-                        {
-                            //Force a new session to be created after document failure - AppXtender/EDW didn't return a document within the timeout period
-                            logoutEdw(app);
-                            break;
-                        }
+                            //If no value returned break out of this result and continue to next document after recording error
+                            if (stringArray == null)
+                            {
+                                //Force a new session to be created after document failure - AppXtender/EDW didn't return a document within the timeout period
+                                logoutEdw(app);
+                                break;
+                            }
 
-                        //Stream image data from EDW
-                        responseStream = streamDocFromEDW(app, stringArray);
+                            //Stream image data from EDW
+                            responseStream = streamDocFromEDW(app, stringArray);
 
-                        if (responseStream == null)
-                            throw new Exception("Issue encountered while building file stream from AppXtender");
+                            if (responseStream == null)
+                                break;
 
-                        //responseStream.Seek(0, SeekOrigin.Begin);
-                        responseStream.Position = 0;
+                            //responseStream.Seek(0, SeekOrigin.Begin);
+                            responseStream.Position = 0;
 
-                        //Archive new document in OnBase
-                        Document newDoc = archiveDoc(app, responseStream);
+                            //Archive new document in OnBase
+                            Document newDoc = archiveDoc(app, responseStream);
 
-                        edwDoc.docTimer.Stop();
-                        edwDoc.docTime = getTimeElapsed(app, edwDoc.docTimer, "Document");
+                            edwDoc.docTimer.Stop();
+                            edwDoc.docTime = getTimeElapsed(app, edwDoc.docTimer, "Document");
 
-                        //Confirm new document exists in OnBase
-                        if (newDoc == null || newDoc.ID < 1)
-                        {
-                            //Handle error for document archival problem, then skip to next document
-                            string err = docError(app, "OnBase document archival failed.");
-                            break;
-                        }
+                            //Confirm new document exists in OnBase
+                            if (newDoc == null)
+                                break;
 
-                        //Add document to Life Cycle for further processing (indexing, etc.)
-                        app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "Adding document to life cycle: " + config.wfName);
-                        wfModule.AddToLifeCycle(newDoc, wfLC);
+                            //Add document to Life Cycle for further processing (indexing, etc.)
+                            app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "Adding document to life cycle: " + config.wfName);
+                            wfModule.AddToLifeCycle(newDoc, wfLC);
 
-                    }   //End of EDW results loop
+                        }   //End of EDW results loop
+                    }
 
                     //Update Workview object with current status
                     updated = updateWvStatus(app, obj);
@@ -622,7 +623,11 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
                 var searchResults = SerializerHelper.FromXml(xmlData.Result.QueryDocumentsResult, typeof(AxSearchResults)) as AxSearchResults;
 
                 if (searchResults.Results.Count == 0)
-                    throw new Exception("No documents were found in AppXtender/EDW that matched the query criteria.");
+                {
+                    //Handle error for document archival problem, then skip to next document
+                    app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "No documents were found in AppXtender/EDW that matched the query criteria. Is the 'iscom' database field set to 132 for this record?");
+                    return null;
+                }
 
                 AxSearchResults axRes = searchResults;
 
@@ -658,8 +663,17 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
 
                 Task<EDW_WebServices.ExportDocumentPagesByRefResponse> jobKey = _service.ExportDocumentPagesByRefAsync(config.sessionTicket, docRef, SerializerHelper.ToXml(axExportData));
 
+                if (jobKey == null)
+                {
+                    string err = docError(app, "An error occurred while requesting document export. No job key was returned.");
+                    return null;
+                }
+
                 if (jobKey.Exception != null)
-                    throw new Exception("Exception thrown while requesting document export: " + jobKey.Exception);
+                {
+                    string err = docError(app, "Exception thrown while requesting document export: " + jobKey.Exception);
+                    return null;
+                }
 
                 app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "Preparation job key ID: " + jobKey.Id);                                      //2 digit number
                 app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "Preparation job key result: " + jobKey.Result.ExportDocumentPagesByRefResult);   //Job key
@@ -699,7 +713,11 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
                     Task<EDW_WebServices.GetExportDocumentPagesResultResponse> exportDocPageResults = _service.GetExportDocumentPagesResultAsync(config.sessionTicket, edwDoc.wvDataSource, jobKey.Result.ExportDocumentPagesByRefResult, false);
 
                     if (exportDocPageResults.Exception != null)
-                        throw new Exception("Exporting document pages failed: " + exportDocPageResults.Exception);
+                    {
+                        string err = docError(app, "Exporting document pages failed: " + exportDocPageResults.Exception);
+                        return null;
+                        //throw new Exception("Exporting document pages failed: " + exportDocPageResults.Exception);
+                    }
 
                     if (i % 10 == 0)
                     {
@@ -719,10 +737,13 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
                     System.Threading.Thread.Sleep(config.edwWaitTime);
                 }
 
-                if (stringArray == null || stringArray.Items.Count == 0)
+                if (stringArray != null && stringArray.Items.Count > 0)
                 {
-                    //throw new Exception("Document export request didn't return any documents within the timeout period of " + config.edwWaitTime + " milliseconds and " + config.edwTimeout + " cycles.");
-
+                    app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "String array count: " + stringArray.Items.Count);
+                    return stringArray;
+                }
+                else
+                {
                     //Handle error for outlier files that are too large
                     string err = docError(app, "EDW document export request didn't return within the set timeout period (" + config.edwWaitTime + "ms, " + config.edwTimeout + " cycles).");
 
@@ -731,10 +752,6 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
 
                     return null;
                 }
-
-                app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "String array count: " + stringArray.Items.Count);
-
-                return stringArray;
 
             }
             catch (Exception ex)
@@ -770,7 +787,10 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
                 Task<EDW_WebServices.DownloadImageStreamResponse> downloadStreamResults = _service.DownloadImageStreamAsync(config.sessionTicket, edwDoc.wvDataSource, (string)stringArray.Items[0], SerializerHelper.ToXml(streamData));
 
                 if (downloadStreamResults.Exception != null)
-                    throw new Exception("Download image stream failed");
+                {
+                    string err = docError(app, "Downloading image stream from AppXtender/EDW failed: " + downloadStreamResults.Exception);
+                    return null;
+                }
 
                 app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "Download Image Stream Result: " + downloadStreamResults.Result.DownloadImageStreamResult);
 
@@ -791,7 +811,10 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
                     downloadStreamResults = _service.DownloadImageStreamAsync(config.sessionTicket, edwDoc.wvDataSource, (string)stringArray.Items[0], SerializerHelper.ToXml(streamData));
 
                     if (downloadStreamResults.Exception != null)
-                        throw new Exception("Download image stream failed");
+                    {
+                        string err = docError(app, "Downloading image stream from AppXtender/EDW failed: " + downloadStreamResults.Exception);
+                        return null;
+                    }
 
                     //Convert the XML doc to stream result
                     streamRes = SerializerHelper.FromXml(downloadStreamResults.Result.DownloadImageStreamResult, typeof(AxStreamResult)) as AxStreamResult;
@@ -808,6 +831,12 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
                     responseStream.Capacity.ToString(),
                     responseStream.Length.ToString()
                 );
+
+                if (responseStream == null)
+                {
+                    string err = docError(app, "An issue occurred while downloading image stream from AppXtender/EDW.");
+                    return null;
+                }
 
                 return responseStream;
 
@@ -845,8 +874,7 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
                 StoreNewDocumentProperties docProps = storage.CreateStoreNewDocumentProperties(docType, fileType);
 
                 // Add editable keyword record to storage properties
-                // TODO: AFKS to fill the remaining keyword values (outside of script)
-                // TODO: Unique ID for multiple apps (appid.docid)?
+                // AFKS will be used to populate additional keyword values (independent of script)
                 docProps.AddKeyword(config.kwNameDocId, edwDoc.wvEdwDocId);
                 docProps.AddKeyword(config.kwNameWvObjId, edwDoc.wvObjId);
                 if (edwDoc.wvDocDate != null)
@@ -858,7 +886,11 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
 
                 Document newDoc = storage.StoreNewDocument(pData, docProps);
 
-                if (newDoc == null || newDoc.ID < 1)
+                //Safely check if ID property exists on new Document object
+                Type docIdType = newDoc.GetType();
+                PropertyInfo docIdProp = docIdType.GetProperty("ID");
+
+                if (newDoc == null || docIdProp == null || newDoc.ID < 1)
                 {
                     //Handle error for document archival problem
                     string err = docError(app, "Issue while attempting to archive new document in OnBase.");
