@@ -271,7 +271,7 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
                             edwDoc.docTimer.Start();
 
                             //Export document from EDW/AppXtender, receive a job key to check on status
-                        Task<DORA_EDW_WebServices.ExportDocumentPagesByRefResponse> jobKey = getJobKeyFromEDW(app, docRef);
+                            Task<DORA_EDW_WebServices.ExportDocumentPagesByRefResponse> jobKey = getJobKeyFromEDW(app, docRef);
 
                             if (jobKey == null)
                                 break;
@@ -636,9 +636,11 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
                 return axRes;
 
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                app.Diagnostics.Write(ex);
+                app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Warning, "Error encountered while attempting to run a document query from AppXtender/EDW for docid " + edwDoc.wvEdwDocId);
+                app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Warning, e);
+                string err = docError(app, "Error encountered while attempting to run a document query from AppXtender/EDW: " + e.Message);
                 return null;
             }
         }
@@ -681,9 +683,11 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
                 return jobKey;
 
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                app.Diagnostics.Write(ex);
+                app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Warning, "Error encountered while attempting to get a job key from AppXtender/EDW for docid " + edwDoc.wvEdwDocId);
+                app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Warning, e);
+                string err = docError(app, "Exception thrown while attempting to get a job key from AppXtender/EDW: " + e.Message);
                 return null;
             }
         }
@@ -724,7 +728,7 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
                         app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "Iteration #" + i + " - Export page results check ID: " + exportDocPageResults.Id);
                     }
 
-                    //TODO: Account for "One or more errors occurred" error at next line - marks as completed, but fails to import doc
+                    //TODO: Account for "One or more errors occurred" error at next line - marks as completed, but fails to import doc - hopefully fixed as of 6/20/23
                     stringArray = SerializerHelper.FromXml(exportDocPageResults.Result.GetExportDocumentPagesResultResult, typeof(AxStringArray)) as AxStringArray;
 
                     //If we received an item back, break out of the loop to process
@@ -754,9 +758,11 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
                 }
 
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                app.Diagnostics.Write(ex);
+                app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Warning, "Error encountered while attempting to get export results from AppXtender/EDW for docid " + edwDoc.wvEdwDocId);
+                app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Warning, e);
+                string err = docError(app, "Exception thrown while retrieving document export result: " + e.Message);
                 return null;
             }
         }
@@ -843,7 +849,9 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
             }
             catch (Exception ex)
             {
-                app.Diagnostics.Write(ex);
+                app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Warning, "An exception occurred while attempting to download the image stream from AppXtender/EDW.");
+                app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Warning, ex);
+                string err = docError(app, "Downloading image stream from AppXtender/EDW failed: " + ex.Message);
                 return null;
             }
         }
@@ -909,10 +917,11 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
                 return newDoc;
 
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                app.Diagnostics.Write("Error while attempting to archive new document in OnBase.");
-                app.Diagnostics.Write(ex);
+                app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Warning, "Error while attempting to archive new document in OnBase.");
+                app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Warning, e);
+                string err = docError(app, "Error while attempting to archive new document in OnBase: " + e.Message);
                 return null;
             }
         }
