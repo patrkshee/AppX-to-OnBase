@@ -227,14 +227,8 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
                     //Log in to EDW/AppXtender and create session ticket if not already set
                     config.sessionTicket = loginToEDW(app);
 
-                    // Get application field definitions
-                    Task<EDW_WebServices.GetApplicationFieldsResponse> axFields = _service.GetApplicationFieldsAsync(config.sessionTicket, edwDoc.wvDataSource, edwDoc.wvEdwAppId);
-
-                    if (axFields.Result == null || axFields == null)
-                        app.Diagnostics.Write("No AppXtender field response received!");
-
-                    //This shows up under the undefined tab in Diag Console for some reason:
-                    app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "EDW app fields result: " + axFields.Result.GetApplicationFieldsResult);
+                    //Get AppXtender field definitions - Not needed?
+                    //Task<EDW_WebServices.GetApplicationFieldsResponse> axFields = getFieldDefsInEDW(app);
 
                     //Execute document query in EDW to retrieve encrypted doc reference for each document
                     AxSearchResults edwQueryResults = queryDocsInEDW(app);
@@ -575,6 +569,39 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
             }
         }
 
+        #endregion
+
+        #region getFieldDefsInEDW
+        /// <summary>
+        /// getFieldDefsInEDW function - Get field definitions from EDW/AppXtender
+        /// </summary>
+        /// <param name="app"></param>
+        public Task<EDW_WebServices.GetApplicationFieldsResponse> getFieldDefsInEDW(Hyland.Unity.Application app)
+        {
+            try
+            {
+                // Get application field definitions
+                Task<EDW_WebServices.GetApplicationFieldsResponse> axFields = _service.GetApplicationFieldsAsync(config.sessionTicket, edwDoc.wvDataSource, edwDoc.wvEdwAppId);
+
+                if (axFields.Result == null || axFields == null)
+                {
+                    app.Diagnostics.Write("No AppXtender field response received!");
+                    string err = docError(app, "No AppXtender field response received!");
+                }
+
+                //This shows up under the undefined tab in Diag Console for some reason:
+                app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "EDW app fields result: " + axFields.Result.GetApplicationFieldsResult);
+
+                return axFields;
+            }
+            catch (Exception e)
+            {
+                app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Warning, "Error encountered while attempting to retrieve field response from AppXtender/EDW for docid " + edwDoc.wvEdwDocId);
+                app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Warning, e);
+                string err = docError(app, "Error encountered while attempting to retrieve field response from AppXtender/EDW: " + e.Message);
+                return null;
+            }
+        }
         #endregion
 
         #region queryDocsInEDW
