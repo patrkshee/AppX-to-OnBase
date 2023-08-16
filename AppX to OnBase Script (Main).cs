@@ -53,7 +53,7 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
         public bool edwSaveAsPrivate = false;
 
         //OnBase Config Settings
-        public string obFileType = "PDF";                           //File type to pull into OnBase. ex. PDF, Image File Format
+        public string obFileType = "PDF";                           //File type to pull into OnBase. ex. PDF, Image File Format, TXT
         public string kwNameDocId = "OITADM EDW Doc ID";            //OnBase keyword type name to add the EDW Docid value to
         public string kwNameWvObjId = "OITADM EDW WV Obj ID";		//OnBase keyword type name to add the associated Workview Object ID value to. Also matches related item KW mapping in WF for indexing.
 
@@ -687,8 +687,20 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
             {
                 //Export Document Pages, Get preparation job key
                 AxDocumentExportData axExportData = new AxDocumentExportData();
-                axExportData.Format = AxDocumentExportData.AxExportFormat.PDF;
-                axExportData.FormType = AxFormOverlayItem.FormTypes.Image;
+
+                if (config.obFileType == "TXT")
+                {
+                    //Override for outputting in Tiff or native format if not convertable
+                    app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Info, "Overriding to tiff instead of PDF. Should use native file format if not convertable.");
+                    axExportData.Format = AxDocumentExportData.AxExportFormat.TIFF;
+                    axExportData.FormType = AxFormOverlayItem.FormTypes.Text;
+                }
+                else
+                {
+                    app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, "Defaulting to PDF file format.");
+                    axExportData.Format = AxDocumentExportData.AxExportFormat.PDF;
+                    axExportData.FormType = AxFormOverlayItem.FormTypes.Image;
+                }
 
                 Task<EDW_WebServices.ExportDocumentPagesByRefResponse> jobKey = _service.ExportDocumentPagesByRefAsync(config.sessionTicket, docRef, SerializerHelper.ToXml(axExportData));
 
@@ -903,8 +915,7 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
 
                 // Set file type 
                 FileType fileType = app.Core.FileTypes.Find(config.obFileType);
-
-                PageData pData = storage.CreatePageData(stream, "pdf");
+                PageData pData = storage.CreatePageData(stream, config.obFileType);
 
                 StoreNewDocumentProperties docProps = storage.CreateStoreNewDocumentProperties(docType, fileType);
 
