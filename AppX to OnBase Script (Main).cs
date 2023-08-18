@@ -51,6 +51,7 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
         public int edwMaxHits = 10;             //An integer value specifying the maximum number of documents to retrieve from the EDW database
         public bool edwSaveQuery = false;
         public bool edwSaveAsPrivate = false;
+        public int retries = 1;					//# of additional retries if the 1st document extraction fails
 
         //OnBase Config Settings
         public string obFileType = "PDF";                           //File type to pull into OnBase. ex. PDF, Image File Format, TXT
@@ -184,6 +185,8 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
                 if (edwDocQresults == null)
                     throw new Exception("Issue encountered while attempting to retrieve query results back from Workview");
 
+                int retry = 0;  //Used to count current # of retries for a document extraction
+
                 //Workview results returned from the WV filter. Find each object id to later modify the existing record
                 for (int i = 0; i < edwDocQresults.Count; i++)
                 {
@@ -305,6 +308,26 @@ namespace OITADMEDWSOAPMainGetDocumentsSchedulable
                             wfModule.AddToLifeCycle(newDoc, wfLC);
 
                         }   //End of EDW results loop
+                    }
+
+                    //If extraction failed retry specified number of times
+                    if (edwDoc.error != null)
+                    {
+                        if (config.retries > retry)
+                        {
+                            i--;        //Repeat the current doc in the loop
+                            retry++;    //Add 1 to the retry counter
+                            app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Warning, "Will attempt to retry this document. This is retry " + retry);
+                            continue;
+                        }
+                        else
+                        {
+                            retry = 0;
+                        }
+                    }
+                    else
+                    {
+                        retry = 0;  //Reset retry counter since this doc is no longer in error state
                     }
 
                     //Update Workview object with current status
