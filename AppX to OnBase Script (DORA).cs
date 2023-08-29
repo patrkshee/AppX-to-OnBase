@@ -30,7 +30,7 @@ namespace OITADMEDWSOAPGetDocumentsSchedulable
         public string wvAppName = "OITADM EDW Migration";               //Name of Workview app for document extraction
         public string wvClsName = "DocumentMetadata";                   //Main AppXtender data class containing docids, data source, etc.
         public string wvClsNameSched = "ScriptManager";                 //Script Manager class for concurrently running multiple instances of script
-        public string wvFilterNameSched = "US - Available Schedulers";  //WV filter for available schedulers to run multiple instance of script
+        public string wvFilterNameSched = "US - DORA Available Schedulers";  //WV filter for available schedulers to run multiple instance of script
         public string wvAttrDocDate = "AppXdate1";                      //Workview Attribute to use for the OnBase document date
                                                                         //public string wvFilterName	= "US - EDW Document Extract 1";//Main WV filter returning AppXtender data - Now specified in Scheduler WV object
                                                                         //public int wvQueryBatchSize 	= 3;							//Max query results to return from EDW filter in Workview - Now specified in Scheduler WV object
